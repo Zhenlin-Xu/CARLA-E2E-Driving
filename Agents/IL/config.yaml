@@ -1,0 +1,17 @@
+env:
+
+  host: localhost
+  port: 2000
+  map: Town01
+  
+  behavior: normal # Cautious, Aggressive, 
+
+  width: 640 
+  height: 360
+
+collect:
+
+  max_trajectory: 500
+  max_step: 200
+
+train:
