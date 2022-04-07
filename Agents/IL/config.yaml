@@ -2,7 +2,7 @@ env:
 
   host: localhost
   port: 2000
-  map: Town01
+  map: Town01_Opt
   
   behavior: normal # Cautious, Aggressive, 
 
@@ -11,7 +11,7 @@ env:
 
 collect:
 
-  max_trajectory: 500
+  max_trajectory: 50
   max_step: 200
 
 train:

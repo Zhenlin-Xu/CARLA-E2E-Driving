@@ -1,6 +1,7 @@
 import os
 import h5py
 import time
+# import datetime
 # import random
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -12,10 +13,12 @@ import gym_carla
 
 
 @hydra.main(config_path=".", config_name="config")
-def collect(cfg : DictConfig) -> None:
+def train_collect(cfg : DictConfig) -> None:
+
 
     print(OmegaConf.to_yaml(cfg))
 
+    # date_str = datetime.datetime.now().strftime('%Y%m%d_%H%M')
     args = {
         'host' : cfg.env.host,
         'port' : cfg.env.port,
@@ -31,9 +34,8 @@ def collect(cfg : DictConfig) -> None:
     # print("S:", state_space)
     # print("A:", action_space)  
 
-    h5_path = to_absolute_path("Datasets")
+    h5_path = to_absolute_path("./Agents/IL/Datasets")
     print(f"Save to {h5_path}\n")
-    f = h5py.File(os.path.join(h5_path, cfg.env.map+'_'+cfg.env.behavior)+".hdf5", 'w')
     num_dataset = 0
     episode = 0
 
@@ -60,10 +62,11 @@ def collect(cfg : DictConfig) -> None:
         episode += 1
 
         if not DONE:
-            f.create_dataset("Traj_"+str(num_dataset), shape=(200,120009+2))
-            f["Traj_"+str(num_dataset)][:,:120009] = state
-            f["Traj_"+str(num_dataset)][:,120009:] = action 
             num_dataset += 1
+            f = h5py.File(os.path.join(h5_path, cfg.env.map+'_'+cfg.env.behavior+'_traj'+str(num_dataset))+".hdf5", 'w')
+            f.create_dataset("data", shape=(200,120009+2))
+            f["data"][:,:120009] = state
+            f["data"][:,120009:] = action 
 
     f.close()
     env.close()
@@ -73,10 +76,12 @@ def collect(cfg : DictConfig) -> None:
 if __name__ == "__main__":
 
     BEGIN = time.time()
-    collect()
+    train_collect()
     END = time.time()
     print(f"\nTIME:{(END - BEGIN):4.2f}")
     print("\nGoodbye, sir!")
+
+    
 '''
 ['/Game/Carla/Maps/Town05',
  '/Game/Carla/Maps/Town03',
