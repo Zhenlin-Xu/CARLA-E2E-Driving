@@ -22,7 +22,7 @@ register(
 register(
     id="CarlaRL-v0",
     entry_point="gym_carla.envs:Carla_RL_Env",
-    max_episode_steps=200,
+    max_episode_steps=300,
     # reward_threshold=25.0, 
     kwargs={
         'seed': None,

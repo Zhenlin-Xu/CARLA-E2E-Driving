@@ -1,82 +1,123 @@
 import os
-from re import I
 import h5py
 import time
 import datetime
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
-import numpy as np
-from tomlkit import key
 import torch
 import torch.nn as nn
-
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.net import MultiModActor
 
-model = MultiModActor().cuda()
-optimizer = torch.optim.Adam(model.parameters(),lr=0.0001)
-criterion = nn.MSELoss()
+@hydra.main(config_path=".", config_name="config")
+def imitation_learn(cfg : DictConfig) -> None:
 
-BEGIN = time.time()
+    print(OmegaConf.to_yaml(cfg))
+    '''
+    Train and test the agent of IL for CARLA E2E-driving.
+    '''
 
-dataset_path = "/media/gav/Gavin/User/ubuntu/DATASETS/2022ImitationLearningData"
-file = "Town01_Opt_normal.hdf5"
+    # setup the model, optim, criterion
+    model = MultiModActor().cuda()
+    optimizer = torch.optim.Adam(model.parameters(),lr=cfg.train.lr)
+    criterion = nn.MSELoss()
 
-# dataset_path = '/home/gav/Desktop/CARLA/Agents/IL/Datasets'
-# file = 'Town01_normal.hdf5'
 
-f = h5py.File(os.path.join(dataset_path, file), "r")
+    train_path = cfg.train.path
+    test_path = cfg.test.path
+    date_str = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+    writer = SummaryWriter(log_dir="/home/gav/Desktop/CARLA/Agents/IL/Logs/"+date_str)
 
-date_str = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-writer = SummaryWriter(log_dir="./Agents/IL/Logs/"+date_str)
+    num_epoch = cfg.train.epoch
+    num_train_dataset = len(os.listdir(train_path)) # 900
+    num_test_dataset  = len(os.listdir(test_path))  # 100
 
-num_epoch = 10
-num_train_dataset = 500 # 500
 
-model.train(True)
+    for epoch in range(num_epoch):
+        
+        BEGIN_epoch = time.time()
+        train_loss = 0
+        test_loss = 0
+        best_loss = 10
+        
+        # Train
+        print(f"\nTraining in the epoch: {epoch:3d}\n")
+        model.train(True)
+        for i, filename in enumerate(os.listdir(train_path)):
+            f = h5py.File(train_path+filename, 'r')
+            BEGIN_batch = time.time()
 
-for epoch in range(num_epoch):
+            rgb = np.array(f["rgb"]).reshape((200,6*100*200))/255.0
+            val = np.array(f["value"])
+            act = torch.Tensor(np.array(f['target'])).cuda()        
+            out, _ = model(np.concatenate((rgb,val),axis=1), None)
+            
+            optimizer.zero_grad()       # zero the parameter gradients
+            loss = criterion(out, act)  # compute the loss 
+            loss.backward()             # backpropagate the loss
+            optimizer.step()            # adjust parameters based on the calculated gradients
+            train_loss += loss.item() 
+            END_batch = time.time()
+            if i % 50 == 0:
+                print('Epoch: {:3d}/{:3d}'.format(epoch, num_epoch),
+                    'Iteration: {:3d}/{:3d}'.format(i, num_train_dataset),
+                    'Loss: {:.4f}'.format(loss.item()),
+                    'Time: {:.4f}'.format(END_batch - BEGIN_batch))
+            f.close()
+
+        if best_loss > train_loss/num_train_dataset:
+            torch.save(model.state_dict(), "/home/gav/Desktop/CARLA/Agents/IL/Models/" + "model_weights_"+date_str+'.pth')
+            # torch.save(model, "./model/model_"+date_str+'.pth')
+            best_loss = train_loss/num_train_dataset
+        # logging and output for training epoch
+        writer.add_scalar('MSE_epoch_loss/train', train_loss/num_train_dataset, epoch)
+        print(f"EPOCH: {epoch:3d} Loss/train: {(train_loss/num_train_dataset):.5f}")  #Loss/test: {test_loss/num_test_dataset}")
+
+
+        # Test
+        print(f"\nTesting in the epoch: {epoch:3d}\n.")
+        model.eval()
+        for i, filename in enumerate(os.listdir(test_path)):
+
+            f = h5py.File(test_path+filename)
+            BEGIN_batch = time.time()
+
+            rgb = np.array(f["rgb"]).reshape((200,6*100*200))/255.0
+            val = np.array(f["value"])
+            act = torch.Tensor(np.array(f['target'])).cuda()        
+            out, _ = model(np.concatenate((rgb,val),axis=1), None)
+            loss = criterion(out, act)  # compute the loss 
+            test_loss += loss.item() 
+            END_batch = time.time()
+            if i % 20 == 0:
+                print('Epoch: {:3d}/{:3d}'.format(epoch, num_epoch),
+                    'Iteration: {:3d}/{:3d}'.format(i, num_test_dataset),
+                    'Loss: {:.4f}'.format(loss.item()),
+                    'Time: {:.4f}'.format(END_batch - BEGIN_batch))
+            f.close()
+        # logging and output for testing epoch
+        writer.add_scalar('MSE_epoch_loss/test', test_loss/num_test_dataset, epoch)
+        
+        END_epoch = time.time()
+        # logging and output for this epoch
+
+        print("\n___________________________________________")
+        writer.add_scalars('MSE_epoch_loss_', {
+            'train_loss':  train_loss/num_train_dataset, 
+            'test_loss' :  test_loss /num_test_dataset  }
+            ,epoch)
+        print(f"\nEPOCH: {epoch:3d} Loss/train: {(train_loss/num_train_dataset):.5f}") 
+        print(f"EPOCH: {epoch:3d} Loss/test: {(test_loss/num_test_dataset):.5f}")
+        print(f"EPOCH: {epoch:3d} TIME: {(END_epoch-BEGIN_epoch)}") 
+        print("___________________________________________")
+
+
+if __name__ == "__main__":
     
-    print()
-    train_loss = 0
-    test_loss = 0
-    best_loss = 10
-    
-
-    # for i, idx in enumerate(list(f.keys())[:num_train_dataset]):
-    for i, idx in enumerate(list(f.keys())):
-        # print(f[idx][:,:-2].shape)
-        BEGIN_ = time.time()
-        optimizer.zero_grad()       # zero the parameter gradients
-
-        act = torch.Tensor(f[idx][:,-2:]).cuda()
-        # print(act.shape)
-        out, _ = model(f[idx][:,:-2], None)
-        # print(out.shape)
-
-        loss = criterion(out, act)  # compute the loss 
-        loss.backward()             # backpropagate the loss
-        optimizer.step()            # adjust parameters based on the calculated gradients
-        train_loss += loss.item() 
-        END_ = time.time()
-        if i % 25 == 0:
-            print('Epoch: {}/{}'.format(epoch, num_epoch),
-                  'Iteration: {}/{}'.format(i, num_train_dataset),
-                  'Loss: {:.4f}'.format(loss.item()),
-                  'Time: {:.4f}'.format(END_ - BEGIN_))
-
-        writer.add_scalar('MSE_batch_loss/train', loss.item(), epoch*num_train_dataset+i)
-
-    if best_loss > train_loss/num_train_dataset:
-        torch.save(model.state_dict(), "./Agents/IL/Models/" + "model_weights_"+date_str+'.pth')
-        # torch.save(model, "./model/model_"+date_str+'.pth')
-        best_loss = train_loss/num_train_dataset
-
-    writer.add_scalar('MSE_epoch_loss/train', train_loss/num_train_dataset, epoch)
-    print(f"EPOCH: {epoch:3d} Loss/train: {(train_loss/num_train_dataset):.5f} TIME: {(END_-BEGIN_)}")  #Loss/test: {test_loss/num_test_dataset}")
-
-f.close()
-END = time.time()
-print(END-BEGIN)
-
-print("Goodbye Sir!")
+    BEGIN = time.time()
+    imitation_learn()
+    END = time.time()
+    print(f"Goodbye Sir!, It takes {END-BEGIN} seconds")

@@ -34,9 +34,10 @@ def train_collect(cfg : DictConfig) -> None:
     # print("S:", state_space)
     # print("A:", action_space)  
 
-    h5_path = to_absolute_path("./Agents/IL/Datasets")
+    # h5_path = to_absolute_path("./Agents/IL/Datasets/Test")
+    h5_path = "/media/gav/Gavin/User/ubuntu/DATASETS/2022ImitationLearningData_/Train"
     print(f"Save to {h5_path}\n")
-    num_dataset = 0
+    num_dataset = 655
     episode = 0
 
     while(num_dataset < cfg.collect.max_trajectory):
@@ -64,11 +65,15 @@ def train_collect(cfg : DictConfig) -> None:
         if not DONE:
             num_dataset += 1
             f = h5py.File(os.path.join(h5_path, cfg.env.map+'_'+cfg.env.behavior+'_traj'+str(num_dataset))+".hdf5", 'w')
-            f.create_dataset("data", shape=(200,120009+2))
-            f["data"][:,:120009] = state
-            f["data"][:,120009:] = action 
+            f.create_dataset("rgb", shape=(200,6,100,200), dtype=np.uint8)
+            f["rgb"][:,:] = state[:,:120000].reshape(200,6,100,200)
+            f.create_dataset("value", shape=(200,9))
+            f["value"][:,:] = state[:,120000:]
+            f.create_dataset("target", shape=(200,2))
+            f["target"][:,:] = action 
+            f.close()
+            print(f"{num_dataset:3d} trajectories saved")
 
-    f.close()
     env.close()
     print(f"\nGenerate {cfg.collect.max_trajectory} datasets of trajectories")
 

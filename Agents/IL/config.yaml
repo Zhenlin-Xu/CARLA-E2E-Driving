@@ -11,7 +11,13 @@ env:
 
 collect:
 
-  max_trajectory: 50
+  max_trajectory: 1000
   max_step: 200
 
 train:
+  lr: 1e-4
+  path: /home/gav/Desktop/CARLA/Agents/IL/Datasets/Train/
+  epoch: 150
+
+test:
+  path: /home/gav/Desktop/CARLA/Agents/IL/Datasets/Test/

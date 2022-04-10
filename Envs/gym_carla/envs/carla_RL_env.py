@@ -113,6 +113,7 @@ class Carla_RL_Env(gym.Env):
             self.clock.tick()
             if self.sync:
                 self.world.world.tick()
+                self.world.player.apply_control(carla.VehicleControl(0.5,0,0))
             else:
                 self.world.world.wait_for_tick()
             if self.controller.parse_events():
@@ -219,7 +220,7 @@ class Carla_RL_Env(gym.Env):
 
         # apply the action to the agent:
         throttle, brake = 0.0, 0.0
-        steer, throttle_brake = float(action[0]), float(action[1])
+        steer, throttle_brake = float(action[1]), float(action[0])
         if throttle_brake >= 0.0:
             throttle = float(throttle_brake)
             brake = 0.0
